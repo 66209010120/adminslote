@@ -905,6 +905,8 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script>
 // ===== FIREBASE SETUP =====
+let db;
+window.addEventListener('load', function() {
 
 const firebaseConfig = {
   apiKey: "AIzaSyDBbcVo3VZcCgosegExwU72h0s2RTmjBI8",
@@ -1014,6 +1016,7 @@ function loginSuccess(u) {
   gameState.coins = currentUserData.coins || 0;
   gameState.won = currentUserData.won || 0;
   gameState.spins = currentUserData.spins || 0;
+  sessionStorage.setItem('lu_session', u);
   document.getElementById('authPage').classList.remove('active');
   document.getElementById('gamePage').classList.add('active');
   updateUI();
@@ -1026,6 +1029,7 @@ async function doLogout() {
   await saveGameState();
   currentUser = null;
   currentUserData = null;
+  sessionStorage.removeItem('lu_session');
   document.getElementById('gamePage').classList.remove('active');
   document.getElementById('authPage').classList.add('active');
   document.getElementById('loginUser').value = '';
@@ -1482,6 +1486,18 @@ async function doSpin() {
   document.getElementById('spinBtn').disabled = false;
 }
 
+// ===== AUTO LOGIN FROM SESSION =====
+(async function autoLogin() {
+  const saved = sessionStorage.getItem('lu_session');
+  if (!saved) return;
+  try {
+    const userData = await getUserData(saved);
+    if (!userData) { sessionStorage.removeItem('lu_session'); return; }
+    currentUserData = userData;
+    loginSuccess(saved);
+  } catch(e) { sessionStorage.removeItem('lu_session'); }
+})();
+
 // ===== EXPOSE FUNCTIONS TO WINDOW (needed for onclick in HTML with module scripts) =====
 window.doLogin = doLogin;
 window.doSignup = doSignup;
@@ -1516,6 +1532,7 @@ document.getElementById('spinBtn').addEventListener('click', doSpin);
 // ENTER KEY for auth
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('regPass2').addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); });
+}); // end window.load
 </script>
 </body>
 </html>
