@@ -900,9 +900,10 @@ body {
 
 <!-- QR.js from CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+<!-- Firebase CDN -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script>
 // ===== FIREBASE SETUP =====
 
 const firebaseConfig = {
@@ -914,8 +915,8 @@ const firebaseConfig = {
   appId: "1:416059719807:web:923f80e9a060295c94bf4a"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 // ===== DATA STORE =====
 let currentUser = null;
@@ -937,28 +938,28 @@ const SYMBOLS = [
 const WEIGHTS = [30, 25, 20, 12, 7, 4, 2];
 
 async function saveUserData(username, data) {
-  await setDoc(doc(db, 'users', username), data);
+  await db.collection('users').doc(username).set(data);
 }
 
 async function getUserData(username) {
-  const snap = await getDoc(doc(db, 'users', username));
-  return snap.exists() ? snap.data() : null;
+  const snap = await db.collection('users').doc(username).get();
+  return snap.exists ? snap.data() : null;
 }
 
 async function getAllUsers() {
-  const snap = await getDocs(collection(db, 'users'));
+  const snap = await db.collection('users').get();
   const result = {};
   snap.forEach(d => result[d.id] = d.data());
   return result;
 }
 
 async function getWinRateSetting() {
-  const snap = await getDoc(doc(db, 'settings', 'winrate'));
-  return snap.exists() ? (snap.data().rate || 30) : 30;
+  const snap = await db.collection('settings').doc('winrate').get();
+  return snap.exists ? (snap.data().rate || 30) : 30;
 }
 
 async function saveWinRateToDB(rate) {
-  await setDoc(doc(db, 'settings', 'winrate'), { rate });
+  await db.collection('settings').doc('winrate').set({ rate });
 }
 
 // ===== AUTH =====
@@ -1221,25 +1222,6 @@ async function spinReel(reelIdx, duration, finalSymIdx) {
   });
 }
 
-async function doSpin() {
-  if (spinning) return;
-  if (gameState.coins < bet) { setSlotMsg('เหรียญไม่พอ! 💰 กดเติมเงิน', 'lose'); return; }
-  spinning = true;
-  gameState.coins -= bet;
-  gameState.spins++;
-  updateUI();
-  document.getElementById('spinBtn').disabled = true;
-  setSlotMsg('กำลังหมุน...', '');
-  const results = [weightedRandom(), weightedRandom(), weightedRandom()];
-  reelPools = [buildReelWithResult(0, results[0]), buildReelWithResult(1, results[1]), buildReelWithResult(2, results[2])];
-  const promises = results.map((symIdx, i) => new Promise(resolve => setTimeout(() => spinReel(i, 700 + i * 300, 2).then(resolve), i * 100)));
-  await Promise.all(promises);
-  evaluateResult(results.map(i => SYMBOLS[i]));
-  await saveGameState();
-  spinning = false;
-  document.getElementById('spinBtn').disabled = false;
-}
-
 function evaluateResult(syms) {
   const allSame = syms[0].name === syms[1].name && syms[1].name === syms[2].name;
   const twoSame = syms[0].name === syms[1].name || syms[1].name === syms[2].name || syms[0].name === syms[2].name;
@@ -1461,13 +1443,7 @@ async function setCoins(uname) {
 
 // Override weightedRandom to respect win rate
 const _origWeightedRandom = weightedRandom;
-function weightedRandomWithRate() {
-  const rate = (await getWinRateSetting()) / 100;
-  return _origWeightedRandom();
-}
-
 // Override doSpin to apply win rate
-const _origDoSpin = doSpin;
 async function doSpin() {
   if (spinning) return;
   if (gameState.coins < bet) { setSlotMsg('เหรียญไม่พอ! 💰 กดเติมเงิน', 'lose'); return; }
@@ -1478,7 +1454,7 @@ async function doSpin() {
   document.getElementById('spinBtn').disabled = true;
   setSlotMsg('กำลังหมุน...', '');
 
-  const rate = parseInt(localStorage.getItem('lu_winrate') || '30') / 100;
+  const rate = (await getWinRateSetting()) / 100;
   const rand = Math.random();
   let results;
 
@@ -1501,7 +1477,7 @@ async function doSpin() {
   const promises = results.map((symIdx, i) => new Promise(resolve => setTimeout(() => spinReel(i, 700 + i * 300, 2).then(resolve), i * 100)));
   await Promise.all(promises);
   evaluateResult(results.map(i => SYMBOLS[i]));
-  saveGameState();
+  await saveGameState();
   spinning = false;
   document.getElementById('spinBtn').disabled = false;
 }
